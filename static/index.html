@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="折中" />
+  <title>折中 · Let's Meet</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <link rel="stylesheet" href="/static/styles.css?v=9" />
+</head>
+<body>
+  <div id="map" class="fullscreen-map" aria-label="碰面点地图"></div>
+
+  <!-- Top Wayfinding Strip -->
+  <header class="mp-topbar">
+    <div class="mp-brand-pill">
+      <span class="mp-logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+          <line x1="4" y1="12" x2="20" y2="12" opacity="0.45"></line>
+          <circle cx="5" cy="12" r="2.5" fill="currentColor" stroke="none"></circle>
+          <circle cx="19" cy="12" r="2.5" fill="currentColor" stroke="none"></circle>
+          <circle cx="12" cy="12" r="3.5" fill="#fff"></circle>
+        </svg>
+      </span>
+      <div class="mp-brand-text">
+        <strong>折中</strong>
+        <span id="topStatusSub" class="mp-sub">按实际路程碰头</span>
+      </div>
+      <span id="roomCodePill" class="mp-room-tag" hidden>#ROOM</span>
+    </div>
+
+    <div class="mp-capsule" role="group" aria-label="房间与桌面快捷入口">
+      <button id="btnCapsuleInvite" type="button" class="mp-capsule-btn">邀人同选</button>
+      <span class="mp-capsule-divider"></span>
+      <button id="btnCapsuleInstall" type="button" class="mp-capsule-btn">装到桌面</button>
+    </div>
+  </header>
+
+  <div id="mapLoadingToast" class="mp-toast" hidden>正在查路线与候选地点...</div>
+
+  <!-- Floating Map-Pick / Candidate Preview Confirmation Banner -->
+  <div id="mapPickBanner" class="mp-pick-banner" hidden>
+    <div class="mp-pick-meta">
+      <span id="mapPickTarget" class="mp-pick-who">正在选定起点 · 点击地图任意位置可微调</span>
+      <strong id="mapPickTitle" class="mp-pick-title">点击地图选择起点位置</strong>
+      <span id="mapPickSub" class="mp-pick-sub">确认位置无误后点右侧「确定」锁定坐标</span>
+    </div>
+    <div class="mp-pick-actions">
+      <button id="btnCancelMapPick" type="button" class="mp-pick-cancel">取消</button>
+      <button id="btnConfirmMapPick" type="button" class="mp-pick-ok">确定</button>
+    </div>
+  </div>
+
+  <!-- Right-Side Map Controls -->
+  <div class="mp-map-fab-group">
+    <button id="btnFitBounds" type="button" class="mp-fab" title="回到全览视野">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9">
+        <path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4"/>
+        <circle cx="12" cy="12" r="2.5"/>
+      </svg>
+      <span>全览</span>
+    </button>
+    <button id="btnSwitchTile" type="button" class="mp-fab" title="切换地图底图">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round">
+        <polygon points="12 3 21 8 12 13 3 8 12 3"/>
+        <polyline points="3 13 12 18 21 13"/>
+      </svg>
+      <span>底图</span>
+    </button>
+  </div>
+
+  <!-- Draggable Multi-Snap Bottom Sheet -->
+  <section id="appSheet" class="app-sheet snap-half" aria-label="操作面板">
+    <div id="sheetDragZone" class="sheet-drag-zone" title="上下拖动调整高度">
+      <div class="sheet-grabber"></div>
+    </div>
+
+    <div class="sheet-body" id="sheetScrollBody">
+      <!-- TAB 1: 起点与碰面类型 -->
+      <div id="tabPaneSetup" class="tab-pane active">
+        <div class="preset-scroll" aria-label="城市与示例路线">
+          <label class="city-select-wrap" title="限定所在城市可避免搜到外地同名地名">
+            <span>城市</span>
+            <select id="citySelect" aria-label="所在城市">
+              <option value="">自动就近</option>
+              <option value="北京" selected>北京</option>
+              <option value="上海">上海</option>
+              <option value="深圳">深圳</option>
+              <option value="广州">广州</option>
+              <option value="杭州">杭州</option>
+              <option value="成都">成都</option>
+              <option value="南京">南京</option>
+              <option value="武汉">武汉</option>
+              <option value="重庆">重庆</option>
+              <option value="苏州">苏州</option>
+              <option value="天津">天津</option>
+              <option value="西安">西安</option>
+              <option value="长沙">长沙</option>
+              <option value="香港">香港</option>
+              <option value="San Francisco">旧金山</option>
+            </select>
+          </label>
+          <button class="preset-chip active" type="button" data-preset="bj_station">北京 · 地铁站碰头</button>
+          <button class="preset-chip" type="button" data-preset="sf_duo">旧金山 · 跨区碰面</button>
+        </div>
+
+        <div id="participantsContainer" class="origin-timeline-card"></div>
+
+        <button id="btnAddPerson" class="btn-add-friend" type="button">+ 加一位同行人</button>
+
+        <div class="mp-section-card">
+          <div class="mp-row-between">
+            <span class="mp-card-label">碰面地点类型</span>
+            <label class="mp-time-inline">
+              <span>预计到达</span>
+              <input id="meetupTime" type="time" value="18:30" />
+            </label>
+          </div>
+
+          <div id="categoryChips" class="type-pill-grid">
+            <button type="button" class="type-pill" data-cat="any">不限地标</button>
+            <button type="button" class="type-pill active" data-cat="station">地铁/车站</button>
+            <button type="button" class="type-pill" data-cat="landmark">商场/广场/公园</button>
+            <button type="button" class="type-pill" data-cat="cafe">咖啡/书店</button>
+            <button type="button" class="type-pill" data-cat="restaurant">吃饭聚餐</button>
+          </div>
+
+          <span class="mp-card-label" style="margin-top:10px;display:block;">附加条件（可点选或直接输入）</span>
+          <div id="quickVibeChips" class="vibe-chips-row">
+            <button type="button" class="vibe-chip active" data-vibe="出站好认不易走散">出站好认</button>
+            <button type="button" class="vibe-chip" data-vibe="少换乘">少换乘</button>
+            <button type="button" class="vibe-chip" data-vibe="方便停车">方便停车</button>
+            <button type="button" class="vibe-chip" data-vibe="安静能坐下聊">安静能坐</button>
+            <button type="button" class="vibe-chip" data-vibe="不吃辣">不吃辣</button>
+            <button type="button" class="vibe-chip" data-vibe="附近适合散步">顺路散步</button>
+          </div>
+
+          <input
+            id="sharedPrompt"
+            class="mp-prompt-input"
+            type="text"
+            placeholder="比如：找个换乘大站出口碰头，或者有车库的商场"
+            value="找个换乘方便的地铁站口直接汇合"
+          />
+        </div>
+
+        <div id="warningBox" class="mp-warning" hidden></div>
+
+        <button id="btnCompute" class="mp-primary-cta" type="button">找折中地点</button>
+      </div>
+
+      <!-- TAB 2: 候选点列表 -->
+      <div id="tabPaneResults" class="tab-pane">
+        <div class="fairness-pill-bar" role="radiogroup" aria-label="排序方式">
+          <button type="button" class="fair-btn" data-fairness="fair">最远的人少跑</button>
+          <button type="button" class="fair-btn active" data-fairness="equal_time">双方耗时接近</button>
+          <button type="button" class="fair-btn" data-fairness="fast_total">总路程最短</button>
+        </div>
+
+        <div id="intentSummaryCard" class="ai-insight-banner" hidden>
+          <div class="ai-insight-top">
+            <span id="providerBadge" class="engine-pill">路网</span>
+            <span id="llmBadge" class="ai-pill">解析</span>
+          </div>
+          <p id="intentSummaryText"></p>
+        </div>
+
+        <div id="resultsList" class="mp-venue-list" aria-live="polite"></div>
+      </div>
+
+      <!-- TAB 3: 扫码同屏与引擎配置 -->
+      <div id="tabPaneProfile" class="tab-pane">
+        <div class="mp-section-card">
+          <h3 class="mp-card-title">手机扫码打开 / 房间同选</h3>
+          <p class="mp-muted">支持蜂窝网络与微信内直接访问，开启 HTTPS 后可直接读取手机定位。</p>
+
+          <div class="qr-box-wrap">
+            <div id="qrCodeBox" class="qr-svg-box" aria-label="访问二维码"></div>
+            <div class="qr-url-info">
+              <div class="url-badge">公网 HTTPS 链接</div>
+              <input id="publicUrlInput" type="text" readonly value="正在读取链接..." />
+              <div class="qr-btn-row">
+                <button id="btnCopyPublicUrl" type="button" class="mp-btn-outline">复制链接</button>
+                <button id="btnShareRoom" type="button" class="mp-btn-fill">建房间发给对方</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mp-section-card">
+          <h3 class="mp-card-title">本机接入高德 API + Google Maps + 大模型</h3>
+          <div id="apiStatusBadges" class="api-badge-row"></div>
+          <p id="serverStatusHint" class="mp-muted" style="margin-bottom:8px;">
+            正在读取本机接口状态...
+          </p>
+
+          <details class="mp-key-guide">
+            <summary>如何获取高德 Web服务 Key 与 Google Maps Key？（点此展开）</summary>
+            <div class="mp-key-guide-body">
+              <p><strong>1. 高德开放平台（国内精确定位 + 实时地铁换乘）：</strong>登录 <code>lbs.amap.com</code> → 控制台「应用管理 → 我的应用」→ 创建新应用 → 点击「添加 Key」，服务平台务必勾选 <strong>「Web服务」</strong>（不要选 Web端 JS API），复制生成的 32 位 Key 填入下方即可。</p>
+              <p><strong>2. Google Maps Platform（港澳台及海外地点 + 实时路况）：</strong>打开 <code>console.cloud.google.com</code> → API 和服务 → 启用 <strong>Places API (New)</strong>、<strong>Geocoding API</strong> 与 <strong>Distance Matrix API（或 Routes API）</strong> → 在「凭据」中创建 API 密钥填入下方。</p>
+              <p><strong>3. 双引擎自动分流：</strong>两个都填好后保持「自动选择」，国内地址自动走高德，海外/英文地址自动走 Google Maps。</p>
+            </div>
+          </details>
+
+          <div class="mp-form-stack" style="margin-top:10px;">
+            <label class="mp-field">
+              <span>地图接口路由</span>
+              <select id="cfgMapProvider">
+                <option value="auto">自动双引擎（国内走高德，海外走 Google，未配走 OSM）</option>
+                <option value="amap">强制高德开放平台 Web 服务</option>
+                <option value="google">强制 Google Maps Platform</option>
+                <option value="osm">OpenStreetMap + OSRM（免 Key）</option>
+                <option value="demo">内置离线样本</option>
+              </select>
+            </label>
+
+            <div class="mp-grid-2">
+              <label class="mp-field">
+                <span>高德 Web服务 Key (AMAP_API_KEY)</span>
+                <input id="cfgAmapKey" type="password" placeholder="粘贴 32 位高德 Web服务 Key" autocomplete="off" />
+              </label>
+              <label class="mp-field">
+                <span>Google Maps Key (GOOGLE_MAPS_API_KEY)</span>
+                <input id="cfgGoogleKey" type="password" placeholder="粘贴 AIza 开头的 Google Key" autocomplete="off" />
+              </label>
+            </div>
+
+            <label class="mp-field">
+              <span>大模型通道</span>
+              <select id="cfgLlmProvider">
+                <option value="auto">优先已配 API Key，失败自动顺延本机/免费通道</option>
+                <option value="official">仅使用已配置的自定义大模型 Key</option>
+                <option value="kimi_web">Kimi 网页版端口（支持 kimi-auth Cookie 或 :8010）</option>
+                <option value="deepseek_web">DeepSeek 网页版端口（本地 :8011）</option>
+                <option value="qwen_web">通义千问端口（本地 :8012 或环境变量）</option>
+                <option value="doubao_web">豆包网页版端口（本地 :8014）</option>
+                <option value="free_public">公共免登录接口（Pollinations）</option>
+              </select>
+            </label>
+
+            <div class="mp-grid-2">
+              <label class="mp-field">
+                <span>大模型 Base URL</span>
+                <input id="cfgLlmBaseUrl" type="text" placeholder="https://api.deepseek.com" />
+              </label>
+              <label class="mp-field">
+                <span>模型名称 (LLM_MODEL)</span>
+                <input id="cfgLlmModel" type="text" placeholder="deepseek-v4-pro" />
+              </label>
+            </div>
+
+            <div class="mp-grid-2">
+              <label class="mp-field">
+                <span>大模型 API Key（本机 .env 已配可留空）</span>
+                <input id="cfgLlmKey" type="password" placeholder="不改可留空，沿用本机 .env" autocomplete="off" />
+              </label>
+              <label class="mp-field">
+                <span>Kimi Cookie / 本地网关（选填）</span>
+                <input id="cfgKimiWebToken" type="password" placeholder="eyJ 开头 kimi-auth（选填）" autocomplete="off" />
+              </label>
+            </div>
+            <input id="cfgFreeWebGateway" type="hidden" value="" />
+
+            <div id="localEnvNotice" class="mp-local-env-note" hidden></div>
+            <div id="verifyReportBox" class="mp-verify-box" hidden></div>
+
+            <div class="qr-btn-row" style="margin-top:6px;flex-wrap:wrap;">
+              <button id="btnSaveLocalEnv" type="button" class="mp-btn-signal" hidden>写入本机 .env 并验证</button>
+              <button id="btnVerifyKeys" type="button" class="mp-btn-fill">测试接口连通</button>
+              <button id="btnSaveSettings" type="button" class="mp-btn-outline">仅存当前浏览器</button>
+              <button id="btnClearSettings" type="button" class="mp-btn-outline">清空浏览器缓存</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="mp-section-card">
+          <h3 class="mp-card-title">放到手机主屏幕</h3>
+          <div class="install-steps">
+            <p>iPhone 用 Safari 打开后，点底部分享按钮，选「添加到主屏幕」，之后打开就没有浏览器地址栏。</p>
+            <p>Android 用 Chrome 或 Edge 打开，点下方按钮或右上角菜单选「安装应用」。</p>
+          </div>
+          <button id="btnTriggerInstall" type="button" class="mp-btn-outline" style="width:100%;margin-top:8px;">
+            添加到主屏幕
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom TabBar with Clean Stroke Icons -->
+    <nav class="app-tabbar" role="tablist" aria-label="主导航">
+      <button type="button" class="tab-btn active" data-tab="setup" role="tab">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9">
+          <circle cx="12" cy="10" r="3"/>
+          <path d="M12 21s-7-5.6-7-11a7 7 0 1 1 14 0c0 5.4-7 11-7 11z"/>
+        </svg>
+        <span class="tab-label">起点</span>
+      </button>
+      <button type="button" class="tab-btn" data-tab="results" role="tab">
+        <span class="tab-icon-wrap">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9">
+            <rect x="3" y="4" width="18" height="6" rx="1.5"/>
+            <rect x="3" y="14" width="18" height="6" rx="1.5"/>
+          </svg>
+          <span id="resultsCountBadge" class="tab-badge" hidden>0</span>
+        </span>
+        <span class="tab-label">候选点</span>
+      </button>
+      <button type="button" class="tab-btn" data-tab="profile" role="tab">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9">
+          <rect x="4" y="4" width="6" height="6" rx="1"/>
+          <rect x="14" y="4" width="6" height="6" rx="1"/>
+          <rect x="4" y="14" width="6" height="6" rx="1"/>
+          <path d="M14 14h6v6h-6z" stroke-dasharray="2 2"/>
+        </svg>
+        <span class="tab-label">同屏与设置</span>
+      </button>
+    </nav>
+  </section>
+
+  <!-- Navigation Action Sheet -->
+  <div id="navModal" class="mp-overlay" hidden>
+    <div class="mp-action-sheet" role="dialog" aria-modal="true" aria-labelledby="navModalTitle">
+      <div class="sheet-grabber"></div>
+      <div class="mp-row-between">
+        <div>
+          <h3 id="navModalTitle" class="mp-card-title">用手机地图出发</h3>
+          <p id="navModalSubtitle" class="mp-muted"></p>
+        </div>
+        <button id="btnCloseNavModal" class="mp-close-circle" type="button" aria-label="关闭">✕</button>
+      </div>
+
+      <div id="navParticipantTabs" class="fairness-pill-bar" style="margin:10px 0;"></div>
+      <div id="navLinksGrid" class="mp-nav-list"></div>
+
+      <button id="btnNativeShareSpot" class="mp-btn-outline" style="width:100%;margin-top:10px;" type="button">
+        复制地点与导航链接发给对方
+      </button>
+    </div>
+  </div>
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+  <script src="https://unpkg.com/qrcode-generator@1.4.4/qrcode.js" crossorigin=""></script>
+  <script src="/static/app.js?v=10"></script>
+</body>
+</html>

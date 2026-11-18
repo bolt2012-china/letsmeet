@@ -1,0 +1,19 @@
+{
+  "name": "折中 · Let's Meet",
+  "short_name": "折中",
+  "description": "按实际路程耗时找几个人之间的折中碰面点，支持车站、地标、商圈与餐饮，直接调起手机导航。",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f5f2",
+  "theme_color": "#ffffff",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='42' fill='%230F6E56'/%3E%3Cline x1='46' y1='96' x2='146' y2='96' stroke='%23ffffff' stroke-width='12' stroke-linecap='round' stroke-opacity='0.45'/%3E%3Ccircle cx='48' cy='96' r='16' fill='%23ffffff'/%3E%3Ccircle cx='144' cy='96' r='16' fill='%23ffffff'/%3E%3Ccircle cx='96' cy='96' r='22' fill='%23ffffff'/%3E%3Ccircle cx='96' cy='96' r='10' fill='%23C84B31'/%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
